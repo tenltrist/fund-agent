@@ -24,7 +24,7 @@ async function file(name,ttl=30000) {
 function bridge(kind,params={}) {
   return new Promise((resolve,reject)=>{
     const nonce=crypto.randomUUID(),frame=document.createElement('iframe');frame.hidden=true;frame.setAttribute('sandbox','allow-scripts');
-    frame.src=new URL('./bridge.html',document.baseURI).href+'#'+encodeURIComponent(JSON.stringify({kind,nonce,...params}));
+    const frameURL=new URL('./bridge.html',document.baseURI);frameURL.searchParams.set('v',document.querySelector('script[src*="assets/app"]')?.getAttribute('src')||'1');frameURL.hash=encodeURIComponent(JSON.stringify({kind,nonce,...params}));frame.src=frameURL.href;
     const done=(error,value)=>{clearTimeout(timer);window.removeEventListener('message',receive);frame.remove();error?reject(Error(error)):resolve(value);};
     const receive=event=>{if(event.source===frame.contentWindow&&event.data?.kind==='public-market'&&event.data.nonce===nonce)done(event.data.error,event.data.value);};
     const timer=setTimeout(()=>done('浏览器直连公开来源超时'),8000);window.addEventListener('message',receive);document.body.append(frame);
