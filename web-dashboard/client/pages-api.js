@@ -33,9 +33,9 @@ export function parseMinute(payload,code) {
   return {code,date,points:rows.map(row=>{const a=row.split(' ');return {time:a[0].slice(0,2)+':'+a[0].slice(2),price:number(a[1]),volume:number(a[2]),turnover_yuan:number(a[3])};}).filter(p=>p.price!==null),previous_close:number(b.qt?.[code]?.[4]),source:'腾讯财经 · 实际分时点'};
 }
 export function parseFundArchive(raw,code) {
-  const points=(raw?.trend||[]).map(r=>({date:chinaDate(r.x),nav:number(r.y),pct:number(r.equityReturn)})).filter(r=>r.nav>0).slice(-180);
+  const points=(raw?.trend||[]).map(r=>({date:chinaDate(r.x),nav:number(r.y),pct:number(r.equityReturn)})).filter(r=>r.nav>0);
   if(!points.length)fail('暂无基金历史净值');
-  return {code,name:raw.name,points,holdings:(raw.holdings||[]).map(c=>c.startsWith('1.')?'sh'+c.slice(2):c.startsWith('0.')?'sz'+c.slice(2):null).filter(Boolean),as_of:points.at(-1).date,source:'天天基金 · 历史单位净值 / 披露重仓股'};
+  return {code,name:raw.name,points,history_scope:'all',fees:raw.fees?Object.fromEntries(Object.entries(raw.fees).map(([k,v])=>[k,number(v)])):null,managers:(raw.managers||[]).map(m=>({name:m.name,experience:m.workTime})),allocation:raw.allocation?{date:raw.allocation.categories?.at(-1),items:raw.allocation.series?.map(r=>({name:r.name,value:number(r.data?.at(-1))}))}:null,scale:raw.scale?{date:raw.scale.categories?.at(-1),value:number(raw.scale.series?.at(-1)?.y)}:null,holdings:(raw.holdings||[]).map(c=>c.startsWith('1.')?'sh'+c.slice(2):c.startsWith('0.')?'sz'+c.slice(2):null).filter(Boolean),as_of:points.at(-1).date,source:'天天基金 · 历史单位净值 / 披露重仓股'};
 }
 async function live(path,query) {
   const code=query.get('code');
@@ -64,6 +64,8 @@ async function live(path,query) {
 }
 async function snapshot(path,query) {
   const data=await file('snapshot'),routes=data.routes||{};
+  if(path==='/api/fund-directory')return snapshotValue(await file('fund-directory',86400000));
+  if(path==='/api/fund-rankings')return snapshotValue(await file('fund-navs',300000));
   if(path==='/api/funds'){
     const codes=(query.get('codes')||'').split(',').filter(Boolean);
     if(!codes.length||codes.length>60||codes.some(c=>!/^\d{6}$/.test(c)))fail('最多查询60只六位基金代码');
@@ -95,7 +97,7 @@ export async function publicApi(input) {
   if(hit&&Date.now()-hit.saved<20000)return hit.value;
   if(pending.has(key))return pending.get(key);
   const work=(async()=>{
-    if(['/api/funds','/api/search-funds','/api/sectors','/api/vix'].includes(path))return snapshot(path,query);
+    if(['/api/fund-directory','/api/fund-rankings','/api/funds','/api/search-funds','/api/sectors','/api/vix'].includes(path))return snapshot(path,query);
     const direct=live(path,query).then(value=>{const result={...value,fetched_at:new Date().toISOString(),delivery:'browser',stale:false};memo.set(key,{saved:Date.now(),value:result});return result;});
     // Fast first paint from a dated snapshot while direct loading continues.
     const fallback=snapshot(path,query).catch(()=>null);

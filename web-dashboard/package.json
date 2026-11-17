@@ -12,7 +12,10 @@
     "preview": "node scripts/preview.mjs"
   },
   "dependencies": {
-    "echarts": "^6.0.0"
+    "@tesseract.js-data/chi_sim": "^1.0.0",
+    "@tesseract.js-data/eng": "^1.0.0",
+    "echarts": "^6.0.0",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "esbuild": "^0.25.0"

@@ -29,7 +29,7 @@ try{
   }else if(kind==='fund-estimate'){
     load('https://fundgz.1234567.com.cn/js/'+fund(payload.code)+'.js');
   }else if(kind==='fund-history'){
-    load('https://fund.eastmoney.com/pingzhongdata/'+fund(payload.code)+'.js',()=>({name:window.fS_name,trend:window.Data_netWorthTrend,holdings:window.stockCodesNew}));
+    load('https://fund.eastmoney.com/pingzhongdata/'+fund(payload.code)+'.js',()=>({name:window.fS_name,trend:window.Data_netWorthTrend,holdings:window.stockCodesNew,managers:window.Data_currentFundManager,allocation:window.Data_assetAllocation,scale:window.Data_fluctuationScale,fees:{original:window.fund_sourceRate,reference:window.fund_Rate,minimum:window.fund_minsg}}));
   }else if(kind==='fund-directory'){
     load('https://fund.eastmoney.com/js/fundcode_search.js',()=>window.r);
   }else throw Error('Unsupported data source');

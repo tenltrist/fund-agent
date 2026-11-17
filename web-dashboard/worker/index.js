@@ -1,5 +1,5 @@
-import {INDICES,quotes,minute,daily,flows,sectors,funds,searchFunds,fundHistory,vix,marketClock,flowBridgeHtml} from './data.js';
-const headers={'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"};
+import {INDICES,quotes,minute,daily,flows,sectors,funds,searchFunds,fundHistory,fundDirectory,fundRankings,vix,marketClock,flowBridgeHtml} from './data.js';
+const headers={'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"};
 const response=(body,type='application/json; charset=utf-8',status=200)=>new Response(typeof body==='string'?body:JSON.stringify(body),{status,headers:{...headers,'Content-Type':type,'Cache-Control':'no-store'}});
 export default {async fetch(request) {
   const url=new URL(request.url),path=url.pathname;
@@ -14,7 +14,9 @@ export default {async fetch(request) {
       const html=flowBridgeHtml(url.searchParams.get('code')||'market',url.searchParams.get('period')||'intraday',url.searchParams.get('nonce')||'');
       return new Response(html,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'none'; script-src 'unsafe-inline' https://push2.eastmoney.com https://push2his.eastmoney.com; sandbox allow-scripts;"}});
     }
-    if(path==='/api/indices')data=await quotes(INDICES);
+    if(path==='/api/fund-directory')data=await fundDirectory();
+    else if(path==='/api/fund-rankings')data=await fundRankings();
+    else if(path==='/api/indices')data=await quotes(INDICES);
     else if(path==='/api/quotes')data=await quotes((url.searchParams.get('codes')||'sh600519').split(','));
     else if(path==='/api/minute')data=await minute(url.searchParams.get('code')||'sh000001');
     else if(path==='/api/daily')data=await daily(url.searchParams.get('code')||'sh000001');

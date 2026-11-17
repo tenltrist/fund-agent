@@ -30,3 +30,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## 本机 OCR
+
+Tesseract.js 7 和 tesseract.js-core 使用 Apache-2.0；构建产物在 `licenses/` 附其授权文本。中文/英文模型通过 MIT 标注的 `@tesseract.js-data/chi_sim`、`@tesseract.js-data/eng` npm 包获取，模型来源为 [naptha/tessdata](https://github.com/naptha/tessdata) / [tesseract-ocr/tessdata](https://github.com/tesseract-ocr/tessdata)。模型与引擎同站点托管，图片只在浏览器处理。官方API参考：[Tesseract.js API](https://github.com/naptha/tesseract.js/blob/master/docs/api.md)。

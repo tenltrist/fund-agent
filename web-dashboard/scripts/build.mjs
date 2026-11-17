@@ -1,5 +1,5 @@
 import {build} from 'esbuild';
-import {readFile,writeFile,mkdir,cp,rm} from 'node:fs/promises';
+import {readFile,writeFile,mkdir,cp,rm,readdir} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
 const root=fileURLToPath(new URL('..',import.meta.url)),out=resolve(root,'dist/public');
@@ -8,11 +8,17 @@ await build({entryPoints:[resolve(root,'client/app.js')],outfile:resolve(out,'as
 await build({entryPoints:[resolve(root,'client/pages-bridge.js')],outfile:resolve(out,'assets/bridge.js'),bundle:true,minify:true,format:'iife',target:'es2022'});
 let html=await readFile(resolve(root,'client/index.html'),'utf8');
 html=html.replaceAll('"/assets/','"./assets/').replace('href="/"','href="./"');
-html=html.replace('<head>','<head><meta http-equiv="Content-Security-Policy" content="default-src \'self\'; script-src \'self\'; style-src \'self\' \'unsafe-inline\'; img-src \'self\' data:; connect-src \'self\'; frame-src \'self\'; object-src \'none\'; base-uri \'self\'">');
+html=html.replace('<head>','<head><meta http-equiv="Content-Security-Policy" content="default-src \'self\'; script-src \'self\' \'wasm-unsafe-eval\'; worker-src \'self\' blob:; style-src \'self\' \'unsafe-inline\'; img-src \'self\' data: blob:; connect-src \'self\'; frame-src \'self\'; object-src \'none\'; base-uri \'self\'">');
 await writeFile(resolve(out,'index.html'),html);
 await writeFile(resolve(out,'bridge.html'),`<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://qt.gtimg.cn https://web.ifzq.gtimg.cn https://push2.eastmoney.com https://push2his.eastmoney.com https://fund.eastmoney.com https://fundgz.1234567.com.cn; connect-src 'none'; base-uri 'none'"><script defer src="./assets/bridge.js"></script></head><body></body></html>`);
 await cp(resolve(root,'client/style.css'),resolve(out,'assets/style.css'));
 await cp(resolve(root,'public/data'),resolve(out,'data'),{recursive:true});
 await cp(resolve(root,'licenses'),resolve(out,'licenses'),{recursive:true});
+await mkdir(resolve(out,'assets/ocr/core'),{recursive:true});await mkdir(resolve(out,'assets/ocr/lang'),{recursive:true});
+await cp(resolve(root,'node_modules/tesseract.js/dist/worker.min.js'),resolve(out,'assets/ocr/worker.min.js'));
+for(const name of await readdir(resolve(root,'node_modules/tesseract.js-core')))if(/\.wasm(?:\.js)?$/.test(name))await cp(resolve(root,'node_modules/tesseract.js-core',name),resolve(out,'assets/ocr/core',name));
+for(const lang of ['chi_sim','eng'])await cp(resolve(root,'node_modules/@tesseract.js-data',lang,'4.0.0',lang+'.traineddata.gz'),resolve(out,'assets/ocr/lang',lang+'.traineddata.gz'));
+await cp(resolve(root,'node_modules/tesseract.js/LICENSE.md'),resolve(out,'licenses/tesseract-LICENSE.txt'));
+await cp(resolve(root,'node_modules/tesseract.js-core/LICENSE'),resolve(out,'licenses/tesseract-core-LICENSE.txt'));
 await writeFile(resolve(out,'.nojekyll'),'');
 console.log('Built GitHub Pages: dist/public');

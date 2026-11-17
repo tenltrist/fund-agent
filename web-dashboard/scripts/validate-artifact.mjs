@@ -5,6 +5,7 @@ const html=await readFile(new URL('index.html',root),'utf8');
 assert(html.includes('./assets/app.js')&&html.includes('./assets/style.css'),'Project-relative assets required');
 assert(!/chatgpt\.site|\.openai|src="\/assets/.test(html),'Pages must not depend on the previous host');
 for(const file of ['assets/app.js','assets/bridge.js','bridge.html','assets/style.css'])assert((await readFile(new URL(file,root))).length>100);
+for(const file of ['assets/ocr/worker.min.js','assets/ocr/core/tesseract-core-simd-lstm.wasm.js','assets/ocr/core/tesseract-core-simd-lstm.wasm','assets/ocr/lang/chi_sim.traineddata.gz','assets/ocr/lang/eng.traineddata.gz'])assert((await readFile(new URL(file,root))).length>1000,'Local OCR asset missing: '+file);
 const snapshot=JSON.parse(await readFile(new URL('data/snapshot.json',root),'utf8'));
 assert.equal(snapshot.schema,1);assert(snapshot.routes['/api/indices'].items.length>=5);
 assert(snapshot.routes['/api/funds'].items.length>=13,'Default fund coverage must be complete');

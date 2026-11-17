@@ -1,6 +1,6 @@
 # Fund Agent · 个人基金决策教练
 
-个人基金工具：保留 Python 命令行诊断与规则引擎，并新增 [观基网页监测台](web-dashboard/README.md)。网页提供大盘、资金流向、基金/个股自选、VIX和持仓监测。当前未接入大语言模型对话。
+个人基金工具：保留 Python 命令行诊断与规则引擎，并新增 [观基网页监测台](web-dashboard/README.md)。网页提供大盘、资金流向、基金/个股自选、VIX和持仓监测。新增多账户记账、收益日历/周月报、本机识图、基金排行和对比，详见[功能对照](web-dashboard/FEATURE_PARITY.md)。当前未接入大语言模型对话。
 
 网页入口：**[观基 · GitHub Pages](https://tenltrist.github.io/fund-agent/)**。源码：[tenltrist/fund-agent](https://github.com/tenltrist/fund-agent)。网页由 GitHub Actions 发布，不依赖 Sites。
 

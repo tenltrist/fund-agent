@@ -154,6 +154,19 @@ export function assignedArray(raw,name) {
   }
   throw Error('数据数组不完整');
 }
+export function assignedJson(raw,name) {
+  const marker=new RegExp('var\\s+'+name+'\\s*=\\s*').exec(raw);if(!marker)throw Error('缺少 '+name);
+  const start=marker.index+marker[0].length,opening=raw[start],closing=opening==='['?']':'}';if(!['[','{'].includes(opening))throw Error('不是JSON容器');
+  let depth=0,quoted=false,escaped=false;
+  for(let i=start;i<raw.length;i++){const c=raw[i];if(escaped){escaped=false;continue;}if(c==='\\'&&quoted){escaped=true;continue;}if(c==='"'){quoted=!quoted;continue;}if(quoted)continue;if(c===opening)depth++;if(c===closing&&--depth===0)return JSON.parse(raw.slice(start,i+1));}
+  throw Error('JSON不完整');
+}
+export function archiveProfile(raw){
+  const get=name=>{try{return assignedJson(raw,name);}catch{return null;}};
+  const managers=get('Data_currentFundManager'),allocation=get('Data_assetAllocation'),scale=get('Data_fluctuationScale');
+  const scalar=name=>number(raw.match(new RegExp('var\\s+'+name+'\\s*=\\s*[\"\']([0-9.]+)'))?.[1]);
+  return {fees:{original:scalar('fund_sourceRate'),reference:scalar('fund_Rate'),minimum:scalar('fund_minsg')},managers:Array.isArray(managers)?managers.map(m=>({name:m.name,experience:m.workTime})):[],allocation:allocation?{date:allocation.categories?.at(-1),items:allocation.series?.map(r=>({name:r.name,value:number(r.data?.at(-1))}))}:null,scale:scale?{date:scale.categories?.at(-1),value:number(scale.series?.at(-1)?.y)}:null};
+}
 export async function fundRankings() {
   return cached('fund-rankings',300000,async()=>{
     const year=Number(chinaDate().slice(0,4))-1;
@@ -161,7 +174,7 @@ export async function fundRankings() {
     const raw=await text('https://fund.eastmoney.com/data/rankhandler.aspx?'+new URLSearchParams(params));
     const match=raw.match(/["']?datas["']?\s*:\s*(\[[\s\S]*?\])/);
     if(!match) throw Error(raw.includes('无访问权限')?'净值榜接口拒绝本次公开请求':'基金净值榜格式变化');
-    const items=JSON.parse(match[1]).map(row=>{const a=row.split(',');return {code:a[0],name:a[1],date:a[3],nav:number(a[4]),pct:number(a[6]),ret_1w:number(a[7]),ret_1m:number(a[8]),ret_3m:number(a[9]),source:'已公布净值'};});
+    const items=JSON.parse(match[1]).map(row=>{const a=row.split(',');return {code:a[0],name:a[1],date:a[3],nav:number(a[4]),pct:number(a[6]),ret_1w:number(a[7]),ret_1m:number(a[8]),ret_3m:number(a[9]),ret_6m:number(a[10]),ret_1y:number(a[11]),ret_ytd:number(a[14]),source:'已公布净值'};});
     return {items,source:'天天基金 · 已公布净值'};
   });
 }
@@ -205,7 +218,7 @@ export async function funds(codes) {
 export async function fundDirectory() {
   return cached('fund-directory',86400000,async()=>{
     const raw=await text('https://fund.eastmoney.com/js/fundcode_search.js');
-    return {items:assignedArray(raw,'r').map(r=>({code:r[0],name:r[2],pinyin:r[1]})),source:'天天基金公开基金名单'};
+    return {items:assignedArray(raw,'r').map(r=>({code:r[0],name:r[2],pinyin:r[1],type:r[3]})),source:'天天基金公开基金名单'};
   });
 }
 export async function searchFunds(query) {
@@ -216,10 +229,10 @@ export async function fundHistory(code) {
   if(!/^\d{6}$/.test(code))throw Error('无效基金代码');
   return cached('fund-history:'+code,1800000,async()=>{
     const raw=await text('https://fund.eastmoney.com/pingzhongdata/'+code+'.js');
-    const points=assignedArray(raw,'Data_netWorthTrend').map(r=>({date:chinaDate(r.x),nav:number(r.y),pct:number(r.equityReturn)})).filter(r=>r.nav>0).slice(-180);
+    const points=assignedArray(raw,'Data_netWorthTrend').map(r=>({date:chinaDate(r.x),nav:number(r.y),pct:number(r.equityReturn)})).filter(r=>r.nav>0);
     if(!points.length)throw Error('暂无基金历史净值');
     let holdings=[];try{holdings=assignedArray(raw,'stockCodesNew').map(c=>c.startsWith('1.')?'sh'+c.slice(2):c.startsWith('0.')?'sz'+c.slice(2):null).filter(Boolean);}catch{}
-    return {code,name:raw.match(/var\s+fS_name\s*=\s*"([^"]*)"/)?.[1],points,holdings,holdings_note:'公开披露的重仓股名单，不代表当前完整持仓；用于跟踪股票走势，不能据此还原基金全部实时净值。',as_of:points.at(-1).date,source:'天天基金 · 历史单位净值 / 披露重仓股',source_url:'https://fundf10.eastmoney.com/'+code+'.html'};
+    return {...archiveProfile(raw),history_scope:'all',code,name:raw.match(/var\s+fS_name\s*=\s*"([^"]*)"/)?.[1],points,holdings,holdings_note:'公开披露的重仓股名单，不代表当前完整持仓；用于跟踪股票走势，不能据此还原基金全部实时净值。',as_of:points.at(-1).date,source:'天天基金 · 历史单位净值 / 披露重仓股',source_url:'https://fundf10.eastmoney.com/'+code+'.html'};
   });
 }
 export async function vix() {
