@@ -1,6 +1,7 @@
 // GitHub Pages has no server. Public scripts run in an opaque sandbox; holdings
 // never enter these requests. Failed sources fall back to dated public snapshots.
 import {INDICES,parseQuotes,parseFlows,number,chinaDate,stockCode,marketClock} from '../worker/data.js';
+import {parseFundHoldings} from '../worker/holdings.js';
 const memo=new Map(),pending=new Map(),files=new Map(),filePending=new Map();
 const fail=message=>{throw Error(message);};
 export function snapshotValue(value,now=Date.now()) {
@@ -58,6 +59,9 @@ async function live(path,query) {
     if(!points.length)fail('公开资金曲线暂不可用');
     return {code,points,as_of:points.at(-1).time,unit:'亿元',source:'东方财富 · 资金流',method:'按数据源的买卖方向与订单规模划分；主力=超大单+大单。净流入是交易分类统计，并非市场新增现金。'};
   }
+  if(path==='/api/fund-holdings'){
+    if(!/^\d{6}$/.test(code))fail('无效基金代码');const year=Number(chinaDate().slice(0,4));let error;for(const at of [year,year-1])try{return parseFundHoldings(await bridge('fund-holdings',{code,year:at}),code);}catch(e){error=e;if(at===year&&!/暂无可取得的股票持仓明细|缺少明细/.test(e.message))throw e;}throw error;
+  }
   if(path==='/api/fund-history'){
     if(!/^\d{6}$/.test(code))fail('无效基金代码');
     return parseFundArchive(await bridge('fund-history',{code}),code);
@@ -90,7 +94,7 @@ async function snapshot(path,query) {
     const combined=[routes['/api/indices'],routes['/api/quotes']].filter(Boolean);
     return snapshotValue(subset({items:combined.flatMap(d=>d.items),source:'腾讯财经',fetched_at:combined.map(d=>d.fetched_at).sort()[0]},(query.get('codes')||'').split(',').map(stockCode)));
   }
-  const key=path+(['flows','minute','daily','fund-history'].some(s=>path.endsWith('/'+s))?'?code='+query.get('code')+(path.endsWith('/flows')?'&period='+(query.get('period')||'intraday'):''):'');
+  const key=path+(['flows','minute','daily','fund-history','fund-holdings'].some(s=>path.endsWith('/'+s))?'?code='+query.get('code')+(path.endsWith('/flows')?'&period='+(query.get('period')||'intraday'):''):'');
   return snapshotValue(routes[key]);
 }
 export async function publicApi(input) {

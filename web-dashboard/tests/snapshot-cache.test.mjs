@@ -1,0 +1,5 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mergeSnapshots} from '../scripts/snapshot-cache.mjs';
+test('new routes survive a newer snapshot produced by an older deployment',()=>{const local={schema:1,generated_at:'2026-11-17T00:00:00Z',routes:{'/api/fund-holdings?code=000001':{as_of:'2026-09-30',fetched_at:'2026-11-17T00:00:00Z'},'/api/indices':{fetched_at:'2026-11-17T00:00:00Z'}}},remote={schema:1,generated_at:'2026-11-17T01:00:00Z',routes:{'/api/indices':{fetched_at:'2026-11-17T01:00:00Z',items:[1]}}};const r=mergeSnapshots(local,remote);assert.equal(r.routes['/api/fund-holdings?code=000001'].as_of,'2026-09-30');assert.deepEqual(r.routes['/api/indices'].items,[1]);});
+test('a later fetch does not replace a newer disclosure or rewrite its timestamp',()=>{const key='/api/fund-holdings?code=000001',local={routes:{[key]:{as_of:'2026-09-30',fetched_at:'2026-11-16T00:00:00Z'}}},remote={schema:1,routes:{[key]:{as_of:'2025-12-31',fetched_at:'2026-11-17T00:00:00Z'}}};assert.equal(mergeSnapshots(local,remote).routes[key].fetched_at,'2026-11-16T00:00:00Z');});

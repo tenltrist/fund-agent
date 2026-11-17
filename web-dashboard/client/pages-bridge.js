@@ -28,6 +28,9 @@ try{
     load('https://push2.eastmoney.com/api/qt/clist/get?'+new URLSearchParams({pn:String(page),pz:'100',fid:'f62',fs:'m:90+t:2',fields:'f12,f14,f2,f3,f62,f6',fltt:'2',np:'1',ut:UT,cb:'publicMarketCallback'}));
   }else if(kind==='fund-estimate'){
     load('https://fundgz.1234567.com.cn/js/'+fund(payload.code)+'.js');
+  }else if(kind==='fund-holdings'){
+    const year=Number(payload.year);if(!Number.isInteger(year)||year<1990||year>2100)throw Error('Invalid year');
+    load('https://fundf10.eastmoney.com/FundArchivesDatas.aspx?'+new URLSearchParams({type:'jjcc',code:fund(payload.code),topline:'10',year:String(year),rt:'0.1234567890123456'}),()=>window.apidata?.content);
   }else if(kind==='fund-history'){
     load('https://fund.eastmoney.com/pingzhongdata/'+fund(payload.code)+'.js',()=>({name:window.fS_name,trend:window.Data_netWorthTrend,holdings:window.stockCodesNew,managers:window.Data_currentFundManager,allocation:window.Data_assetAllocation,scale:window.Data_fluctuationScale,fees:{original:window.fund_sourceRate,reference:window.fund_Rate,minimum:window.fund_minsg}}));
   }else if(kind==='fund-directory'){
