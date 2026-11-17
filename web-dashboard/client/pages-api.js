@@ -1,7 +1,7 @@
 // GitHub Pages has no server. Public scripts run in an opaque sandbox; holdings
 // never enter these requests. Failed sources fall back to dated public snapshots.
 import {INDICES,parseQuotes,parseFlows,number,chinaDate,stockCode,marketClock} from '../worker/data.js';
-const memo=new Map(),pending=new Map(),files=new Map();
+const memo=new Map(),pending=new Map(),files=new Map(),filePending=new Map();
 const fail=message=>{throw Error(message);};
 export function snapshotValue(value,now=Date.now()) {
   if(!value)return null;
@@ -14,9 +14,12 @@ export function subset(value,codes) {
 }
 async function file(name,ttl=30000) {
   const hit=files.get(name);if(hit&&Date.now()-hit.saved<ttl)return hit.value;
-  const response=await fetch(new URL('./data/'+name+'.json',document.baseURI),{cache:'no-cache',signal:AbortSignal.timeout(12000)});
-  if(!response.ok)throw Error('GitHub 公共快照暂不可用');
-  const value=await response.json();files.set(name,{saved:Date.now(),value});return value;
+  if(filePending.has(name))return filePending.get(name);
+  const task=(async()=>{
+    const response=await fetch(new URL('./data/'+name+'.json',document.baseURI),{cache:'no-cache',signal:AbortSignal.timeout(12000)});
+    if(!response.ok)throw Error('GitHub 公共快照暂不可用');
+    const value=await response.json();files.set(name,{saved:Date.now(),value});return value;
+  })().finally(()=>filePending.delete(name));filePending.set(name,task);return task;
 }
 function bridge(kind,params={}) {
   return new Promise((resolve,reject)=>{
