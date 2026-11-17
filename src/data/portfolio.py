@@ -14,11 +14,14 @@ class FundHolding:
     cost_basis: Optional[float] = None
     profit: Optional[float] = None
     profit_rate: Optional[float] = None
+    peak_rate: Optional[float] = None
+    position_id: str = ""
 
 
 @dataclass
 class Portfolio:
     holdings: list[FundHolding] = field(default_factory=list)
+    as_of: Optional[str] = None
 
     @property
     def total_value(self) -> float:
@@ -66,7 +69,7 @@ class Portfolio:
         )[:top_n]
 
     def to_dict(self) -> dict:
-        return {
+        data = {
             "holdings": [
                 {
                     "name": h.name,
@@ -76,10 +79,15 @@ class Portfolio:
                     "cost_basis": h.cost_basis,
                     "profit": h.profit,
                     "profit_rate": h.profit_rate,
+                    **({"peak_rate": h.peak_rate} if h.peak_rate is not None else {}),
+                    **({"position_id": h.position_id} if h.position_id else {}),
                 }
                 for h in self.holdings
             ]
         }
+        if self.as_of is not None:
+            data["as_of"] = self.as_of
+        return data
 
     @classmethod
     def from_dict(cls, data: dict) -> "Portfolio":
@@ -92,10 +100,12 @@ class Portfolio:
                 cost_basis=h.get("cost_basis"),
                 profit=h.get("profit"),
                 profit_rate=h.get("profit_rate"),
+                peak_rate=h.get("peak_rate"),
+                position_id=h.get("position_id", ""),
             )
             for h in data["holdings"]
         ]
-        return cls(holdings=holdings)
+        return cls(holdings=holdings, as_of=data.get("as_of"))
 
     @classmethod
     def from_json(cls, path: str) -> "Portfolio":

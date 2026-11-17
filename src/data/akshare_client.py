@@ -9,6 +9,7 @@ from datetime import date
 from typing import Optional
 
 import pandas as pd
+import numpy as np
 
 
 # ── fund data (daily rankings, NAV, returns) ──────────────
@@ -55,46 +56,82 @@ def fetch_bottom_funds(n: int = 20, symbol: str = "全部") -> pd.DataFrame:
     return df.nsmallest(n, "daily_return")
 
 
+FUND_COLUMNS = ["code", "name", "my_name", "date", "source", "nav", "daily_return"]
+
+
+def normalize_fund_code(value) -> str:
+    """Keep leading zeroes even when a provider returns integer codes."""
+    text = str(value).strip()
+    if text.endswith(".0"):
+        text = text[:-2]
+    return text.zfill(6) if text.isdigit() else text
+
+
+def _valid_fund_rows(frame: pd.DataFrame, today: date) -> pd.DataFrame:
+    frame = frame.copy()
+    frame["nav"] = pd.to_numeric(frame["nav"], errors="coerce")
+    frame["daily_return"] = pd.to_numeric(frame["daily_return"], errors="coerce")
+    frame["date"] = pd.to_datetime(frame["date"], errors="coerce", format="mixed").dt.date
+    valid = (np.isfinite(frame["nav"]) & (frame["nav"] > 0)
+             & np.isfinite(frame["daily_return"]) & frame["date"].notna()
+             & (frame["date"] <= today))
+    return (frame.loc[valid].sort_values("date", ascending=False)
+            .drop_duplicates("code", keep="first"))
+
+
 def fetch_my_fund_data(
     codes: list[str], fund_map: dict[str, str]
 ) -> pd.DataFrame:
-    """Pull TODAY's estimated NAV for my funds — real-time, not T+1.
+    """Use today's valid estimates, then fill missing funds with dated NAVs.
 
-    Uses fund_value_estimation_em for intraday estimates.
-    Falls back to fund_open_fund_rank_em (T+1 confirmed) if estimation unavailable.
+    Either source can fail without discarding useful rows from the other.
+    Source failures and unresolved codes are retained in DataFrame.attrs.
     """
+    requested = list(dict.fromkeys(normalize_fund_code(code) for code in codes if str(code).strip()))
+    names = {normalize_fund_code(code): name for code, name in fund_map.items()}
+    result = pd.DataFrame(columns=FUND_COLUMNS)
+    warnings = []
+    today = pd.Timestamp.now(tz="Asia/Shanghai").date()
+    if not requested:
+        result.attrs.update(warnings=[], missing_codes=[])
+        return result
+
     import akshare as ak
 
     try:
-        df = ak.fund_value_estimation_em(symbol="全部")
-        my = df[df["基金代码"].isin(codes)].copy()
+        frame = ak.fund_value_estimation_em(symbol="全部").copy()
+        frame["code"] = frame["基金代码"].map(normalize_fund_code)
+        frame = frame[frame["code"].isin(requested)].copy()
+        frame["daily_return"] = frame[f"{today}-估算数据-估算增长率"].astype(str).str.replace("%", "", regex=False)
+        frame["nav"] = frame[f"{today}-估算数据-估算值"]
+        frame["date"] = today
+        frame["source"] = "盘中估算"
+        frame["my_name"] = frame["code"].map(names)
+        frame["name"] = frame["my_name"].fillna(frame["基金名称"])
+        result = _valid_fund_rows(frame[FUND_COLUMNS], today)
+    except Exception as exc:
+        warnings.append(f"盘中估算不可用：{type(exc).__name__}: {str(exc)[:100]}")
 
-        today = pd.Timestamp.now().strftime("%Y-%m-%d")
-        est_col = f"{today}-估算数据-估算增长率"
-        nav_col = f"{today}-估算数据-估算值"
+    missing = set(requested) - set(result["code"])
+    if missing:
+        try:
+            frame = fetch_fund_rankings().copy()
+            frame["code"] = frame["code"].map(normalize_fund_code)
+            frame = frame[frame["code"].isin(missing)].copy()
+            frame["source"] = "已公布净值"
+            frame["my_name"] = frame["code"].map(names)
+            frame["name"] = frame["my_name"].fillna(frame["name"])
+            confirmed = _valid_fund_rows(frame[FUND_COLUMNS], today)
+            result = pd.concat([result, confirmed], ignore_index=True)
+        except Exception as exc:
+            warnings.append(f"已公布净值补全失败：{type(exc).__name__}: {str(exc)[:100]}")
 
-        if est_col not in my.columns:
-            raise KeyError(f"列名不存在: {est_col}")
-
-        # Parse "4.51%" → 4.51
-        my["daily_return"] = my[est_col].astype(str).str.replace("%", "")
-        my["daily_return"] = pd.to_numeric(my["daily_return"], errors="coerce")
-        my["nav"] = pd.to_numeric(my[nav_col], errors="coerce")
-        my["my_name"] = my["基金代码"].map(fund_map)
-        my["date"] = today
-        my["code"] = my["基金代码"]
-        my["name"] = my["my_name"].fillna(my["基金名称"])
-        result = my[["code", "name", "my_name", "date", "nav", "daily_return"]].copy()
-        # Drop rows where daily_return couldn't be parsed
-        result = result.dropna(subset=["daily_return"])
-        return result
-
-    except Exception:
-        # Fallback: use T+1 confirmed data
-        df = fetch_fund_rankings()
-        my = df[df["code"].isin(codes)].copy()
-        my["my_name"] = my["code"].map(fund_map)
-        return my
+    if result.empty and warnings:
+        raise RuntimeError("；".join(warnings))
+    order = {code: i for i, code in enumerate(requested)}
+    result = result.sort_values("code", key=lambda values: values.map(order)).reset_index(drop=True)
+    result.attrs.update(warnings=warnings, missing_codes=[code for code in requested if code not in set(result["code"])])
+    return result
 
 
 # ── market indices ────────────────────────────────────────
@@ -103,7 +140,10 @@ def fetch_index_spot() -> pd.DataFrame:
     """A-share index spot prices. Uses Sina source (works without VPN)."""
     import akshare as ak
 
-    df = ak.stock_zh_index_spot_sina()
+    fetcher = getattr(ak, "index_zh_spot_sina", None)
+    if fetcher is None:
+        fetcher = ak.stock_zh_index_spot_sina
+    df = fetcher()
     key_names = ["上证指数", "深证成指", "创业板指", "科创50", "沪深300"]
     result = df[df["名称"].isin(key_names)][
         ["名称", "最新价", "涨跌幅"]
@@ -150,6 +190,7 @@ def fetch_sector_consecutive_days(sector_name: str, lookback: int = 30) -> dict:
         return {"error": "数据不足"}
 
     # Compute daily change from close price
+    hist = hist.sort_values("日期")
     hist["change"] = hist["收盘价"].pct_change() * 100
     hist = hist.sort_values("日期", ascending=False)
     changes = hist["change"].tolist()
@@ -169,6 +210,7 @@ def fetch_sector_consecutive_days(sector_name: str, lookback: int = 30) -> dict:
 
     return {
         "sector": sector_name,
+        "date": str(hist.iloc[0]["日期"]),
         "direction": direction,
         "streak": streak,
         "today_change": changes[0],
@@ -247,7 +289,7 @@ def safe_fetch(func, label: str, **kwargs) -> Optional[pd.DataFrame]:
     except Exception as e:
         msg = str(e)[:80]
         if "Connection" in str(type(e).__name__) or "RemoteDisconnected" in msg:
-            print(f"  ⚠️ {label}: 连接被拒（可能VPN未关）")
+            print(f"  ⚠️ {label}: 连接失败（请检查网络、代理或数据源可用性）")
         else:
             print(f"  ⚠️ {label}: {type(e).__name__}: {msg}")
         return None

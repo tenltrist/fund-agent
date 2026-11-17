@@ -1,0 +1,20 @@
+{
+  "name": "fund-observatory",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "node scripts/build.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "validate": "node scripts/validate-artifact.mjs",
+    "build:server": "node scripts/build-server.mjs",
+    "snapshot": "node scripts/collect-snapshot.mjs",
+    "preview": "node scripts/preview.mjs"
+  },
+  "dependencies": {
+    "echarts": "^6.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

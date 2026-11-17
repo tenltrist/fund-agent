@@ -10,6 +10,7 @@ from enum import Enum
 import json
 import os
 from datetime import datetime, date
+import math
 
 
 class RuleType(Enum):
@@ -40,8 +41,9 @@ class Rule:
 class RuleCheckResult:
     rule: Rule
     triggered: bool
-    current_value: float
+    current_value: Optional[float]
     message: str
+    evaluated: bool = True
 
 
 class RulesEngine:
@@ -123,15 +125,23 @@ class RulesEngine:
         """
         fund_name = rule.target
         info = portfolio_data.get(fund_name)
-        if not info:
-            return None
+        reason = "规则目标不在当前持仓中" if info is None else info.get("pending_reason")
+        if not reason:
+            try:
+                current_rate = float(info["profit_rate"])
+                peak_rate = float(info["peak_rate"])
+                if not (math.isfinite(current_rate) and math.isfinite(peak_rate)
+                        and current_rate > -100 and peak_rate >= current_rate):
+                    reason = "当前收益率或峰值无效"
+                elif not info.get("history_ready", True):
+                    reason = "尚无可比较的历史峰值"
+            except (KeyError, TypeError, ValueError):
+                reason = "缺少当前收益率或历史峰值"
+        if reason:
+            return RuleCheckResult(rule, False, None, f"⚪ {fund_name}：待补数据，{reason}", evaluated=False)
 
-        # In Phase 1 we don't have peak_rate stored yet.
-        # For now, use profit_rate — if it's dropped below a threshold
-        # relative to the highest recorded profit rate.
-        current_rate = info.get("profit_rate", 0)
-        peak_rate = info.get("peak_rate", current_rate)
-        drawdown = peak_rate - current_rate
+        # Drawdown is the percentage fall in value, not return percentage points.
+        drawdown = (peak_rate - current_rate) / (100 + peak_rate) * 100
 
         triggered = drawdown >= rule.threshold
         return RuleCheckResult(
@@ -139,13 +149,15 @@ class RulesEngine:
             triggered=triggered,
             current_value=drawdown,
             message=(
-                f"🔴 {fund_name} 从最高收益率 {peak_rate:+.1f}% 回撤了 {drawdown:.1f}%"
+                f"🔴 {fund_name} {info.get('history_scope', '已知峰值')}收益率 {peak_rate:+.2f}%，"
+                f"当前 {current_rate:+.2f}%，按高点价值回撤 {drawdown:.2f}%"
                 f"（触发线：{rule.threshold}%）\n"
                 f"   规则：{rule.action}"
             )
             if triggered
             else (
-                f"🟢 {fund_name} 当前回撤 {drawdown:.1f}%，"
+                f"🟢 {fund_name} {info.get('history_scope', '已知峰值')}收益率 {peak_rate:+.2f}%，"
+                f"当前 {current_rate:+.2f}%，按高点价值回撤 {drawdown:.2f}%，"
                 f"距止损线 {rule.threshold}% 还有 {rule.threshold - drawdown:.1f}% 安全垫"
             ),
         )

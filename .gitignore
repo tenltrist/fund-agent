@@ -3,3 +3,9 @@ __pycache__/
 .DS_Store
 .venv/
 *.egg-info/
+data/peak_state.json
+data/.peak-*
+
+# Personal financial state stays local
+data/portfolio.json
+data/rules.json

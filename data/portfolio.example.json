@@ -1,0 +1,6 @@
+{
+  "as_of": "2026-11-16",
+  "holdings": [
+    {"name": "示例基金（虚构持仓）", "code": "000001", "amount": 1350, "sector": "其他", "cost_basis": 1000, "profit": 350, "profit_rate": 35, "peak_rate": 50, "position_id": "example-1"}
+  ]
+}

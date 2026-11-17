@@ -5,6 +5,7 @@ import argparse
 import os
 from datetime import date
 from src.data.portfolio import Portfolio
+from src.data.peak_tracker import PeakTracker
 from src.analysis.doctor import (
     compute_industry_exposure,
     compute_overlap_groups,
@@ -188,14 +189,8 @@ def cmd_check_rules(rules_path: str, portfolio_path: str) -> None:
 
     portfolio = Portfolio.from_json(portfolio_path)
 
-    # Build portfolio_data dict for rules engine
-    portfolio_data = {}
-    for h in portfolio.holdings:
-        portfolio_data[h.name] = {
-            "profit_rate": h.profit_rate or 0,
-            "amount": h.amount,
-            "peak_rate": max(h.profit_rate or 0, 0),
-        }
+    state_path = os.path.join(os.path.dirname(portfolio_path), "peak_state.json")
+    portfolio_data = PeakTracker(state_path).observe(portfolio)
 
     industries = compute_industry_exposure(portfolio)
     results = engine.check_all(portfolio_data, industries)
@@ -204,9 +199,11 @@ def cmd_check_rules(rules_path: str, portfolio_path: str) -> None:
     print("=" * 60)
     print("  🛡️  规则检查")
     print("=" * 60)
+    print(f"  持仓快照日期：{portfolio.as_of or '未提供（仅反映持仓配置，不能视为今日数据）'}")
 
     triggered = [r for r in results if r.triggered]
-    ok = [r for r in results if not r.triggered]
+    ok = [r for r in results if r.evaluated and not r.triggered]
+    pending = [r for r in results if not r.evaluated]
 
     if triggered:
         print(f"\n  ⚠️  触发 {len(triggered)} 条：\n")
@@ -217,13 +214,19 @@ def cmd_check_rules(rules_path: str, portfolio_path: str) -> None:
     if ok:
         print(f"  ✅ 未触发 ({len(ok)} 条)：")
         for r in ok:
-            # short one-liner for non-triggered
-            print(f"     {r.rule.name}")
+            print(f"     {r.message if r.rule.rule_type == RuleType.STOP_LOSS else r.rule.name}")
+
+    if pending:
+        print(f"\n  ⚪ 待补数据 ({len(pending)} 条)：")
+        for r in pending:
+            print(f"     {r.message}")
 
     print()
     print("─" * 60)
-    if not triggered:
-        print("  全部规则通过。今天无需操作。")
+    if pending:
+        print("  检查未完成：部分止损规则缺少历史数据，不能判定全部通过。")
+    elif not triggered:
+        print("  本次快照在已知/已记录峰值范围内未触发规则。")
     else:
         print("  以上是规则提醒——是否操作由你决定。")
     print("─" * 60)
@@ -242,7 +245,7 @@ def cmd_market(portfolio_path: str) -> None:
 
     print()
     print("=" * 60)
-    print("  📈 今日市场 · " + date.today().isoformat())
+    print("  📈 市场概览 · 查询日期 " + date.today().isoformat())
     print("=" * 60)
 
     # ── 1. indices ──
@@ -253,14 +256,16 @@ def cmd_market(portfolio_path: str) -> None:
             direction = "🔴" if row["change"] < 0 else "🟢"
             print(f"  {direction} {row['name']:<8s}  {row['price']:>10.2f}  {row['change']:>+6.2f}%")
     else:
-        print("  （连接被拒——关掉 VPN 后重试）")
+        print("  （指数数据获取失败，详见上方错误）")
 
     # ── 2. my portfolio TODAY ──
-    print(f"\n── 我的持仓今日表现 ──")
+    print(f"\n── 我的持仓最新数据 ──")
     my_data = ak.safe_fetch(
         lambda: ak.fetch_my_fund_data(codes, fund_map), "我的基金"
     )
     if my_data is not None:
+        for warning in my_data.attrs.get("warnings", []):
+            print(f"  ⚠️ {warning}")
         total_weighted = 0.0
         for _, row in my_data.iterrows():
             name = row.get("my_name", row["name"])
@@ -271,17 +276,26 @@ def cmd_market(portfolio_path: str) -> None:
             direction = "🔴" if daily_ret < 0 else "🟢"
             print(
                 f"  {direction} {name[:28]:<30s}  {daily_ret:>+6.2f}%  "
-                f"净值 {row['nav']}"
+                f"净值 {row['nav']}  [{row['date']} · {row['source']}]"
             )
             if h:
                 total_weighted += daily_ret * h.amount / portfolio.total_value
         print(f"  {'─' * 50}")
-        print(f"  今日估计：{total_weighted:+.2f}%  →  ¥{portfolio.total_value * total_weighted / 100:+,.0f}")
-        # Show missing funds
         found_codes = set(my_data["code"].tolist())
         missing = [h for h in portfolio.holdings if h.code not in found_codes]
+        covered = [h for h in portfolio.holdings if h.code in found_codes]
+        coverage_pct = sum(h.amount for h in covered) / portfolio.total_value * 100
+        print(f"  数据覆盖：{len(covered)}/{portfolio.fund_count} 只，持仓市值 {coverage_pct:.1f}%")
+        source_counts = my_data["source"].value_counts()
+        print("  数据来源：" + " / ".join(f"{source} {count} 只" for source, count in source_counts.items()))
+        data_dates = {str(value) for value in my_data["date"]}
+        if not missing and data_dates == {date.today().isoformat()}:
+            print(f"  今日涨跌（按配置仓位加权）：{total_weighted:+.2f}%  →  ¥{portfolio.total_value * total_weighted / 100:+,.0f}")
+        else:
+            print("  数据未覆盖全部持仓或日期不是今天，暂不计算组合今日涨跌。")
+        # Show missing funds
         if missing:
-            print(f"  ⚠️ 无估算数据：{', '.join(h.name[:12] for h in missing)}")
+            print(f"  ⚠️ 仍缺少有效行情：{', '.join(h.name[:12] for h in missing)}")
     else:
         print("  （基金数据获取失败）")
 
@@ -321,7 +335,7 @@ def cmd_market(portfolio_path: str) -> None:
                 arrow = "🔺" if streak["direction"] == "涨" else "🔻"
                 print(
                     f"  {arrow} {sect:<8s}  连{streak['direction']} "
-                    f"{streak['streak']} 天  今日 {streak['today_change']:+.2f}%"
+                    f"{streak['streak']} 天  最新 {streak['date']} {streak['today_change']:+.2f}%"
                 )
             else:
                 print(f"  ⚠️ {sect}: {streak}")
@@ -329,19 +343,19 @@ def cmd_market(portfolio_path: str) -> None:
             print(f"  ⚠️ {sect}: {type(e).__name__}: {e}")
 
     # ── 4. top/bottom funds today ──
-    print(f"\n── 今日涨幅 TOP 10（全部基金）──")
+    print(f"\n── 最新公布涨幅 TOP 10（全部基金）──")
     top = ak.safe_fetch(lambda: ak.fetch_top_funds(10), "涨幅榜")
     if top is not None:
         for _, row in top.iterrows():
-            print(f"  🟢 {row['name'][:30]:<32s}  {row['daily_return']:>+6.2f}%")
+            print(f"  🟢 {row['name'][:30]:<32s}  {row['daily_return']:>+6.2f}%  [{row['date']}]")
     else:
         print("  （数据获取失败）")
 
-    print(f"\n── 今日跌幅 TOP 10（全部基金）──")
+    print(f"\n── 最新公布跌幅 TOP 10（全部基金）──")
     bot = ak.safe_fetch(lambda: ak.fetch_bottom_funds(10), "跌幅榜")
     if bot is not None:
         for _, row in bot.iterrows():
-            print(f"  🔴 {row['name'][:30]:<32s}  {row['daily_return']:>+6.2f}%")
+            print(f"  🔴 {row['name'][:30]:<32s}  {row['daily_return']:>+6.2f}%  [{row['date']}]")
     else:
         print("  （数据获取失败）")
 
