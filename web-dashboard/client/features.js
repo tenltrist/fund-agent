@@ -1,5 +1,6 @@
 import {emptyLedger,validateLedger,balances,valuedPositions,incomeTimeline,periodReport,nextPlanDate,parseHoldingText,fundMetrics,capitalCycle} from './ledger.js';
 import {observePortfolio} from './state.js';
+import {persistLedger} from './store.js';
 const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=v=>v==null?'—':Number(v).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2}),signed=v=>v==null?'—':(v>0?'+':'')+money(v),tone=v=>v>0?'positive':v<0?'negative':'muted';
 const uid=()=>crypto.randomUUID(),dateInput=(id,label,value)=>`<label>${label}<input type="date" id="${id}" value="${value}" required></label>`;
@@ -9,7 +10,7 @@ export function mountFeatures({state,save,api,toast,chart,line,today,go}){
  let active='',quotes=[],histories={},directory=[],rankings=[],timeline=[],drafts=[],accountFilter='all',ocrWorker,ocrFile,ocrURL,ocrGeneration=0;
  const book=()=>validateLedger(state.ledger||emptyLedger(),today());
  const filtered=()=>{const b=book();if(accountFilter==='all')return b;const positions=b.positions.filter(p=>p.account_id===accountFilter),ids=new Set(positions.map(p=>p.id));return {...b,positions,transactions:b.transactions.filter(t=>ids.has(t.position_id))};};
- const commit=b=>{state.ledger=validateLedger(b,today());save();renderBook();};
+ const commit=b=>{persistLedger(state,b,today(),save);renderBook();};
  const options=(items,label,selected)=>items.map(a=>`<option value="${esc(a.id)}" ${a.id===selected?'selected':''}>${esc(label(a))}</option>`).join('');
  const accountOptions=()=>options(book().accounts,a=>a.name);
  const nav=document.querySelector('[aria-label="主导航"]')||document.querySelector('nav');

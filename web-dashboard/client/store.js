@@ -2,6 +2,11 @@ import {DEFAULT_FUNDS,DEFAULT_THRESHOLDS,validatePortfolio,validatePeaks} from '
 import {emptyLedger,validateLedger,validateLedgerPeaks} from './ledger.js';
 import {validateFlowAlerts} from './flow-model.js';
 export const STORE='fund-observatory-v1';
+export function persistLedger(state,input,today,persist){
+  const previous=state.ledger;state.ledger=validateLedger(input,today);
+  try{if(persist()===false)throw Error('持仓未保存：本机存储不可用或空间已满，请导出备份后重试');}
+  catch(error){state.ledger=previous;throw error;}
+}
 const object=v=>v&&typeof v==='object'&&!Array.isArray(v);
 const strings=(value,limit)=>Array.isArray(value)&&value.length<=limit&&value.every(v=>typeof v==='string'&&v.length<300);
 const thresholds=value=>{

@@ -29,7 +29,7 @@ const signed=(v,d=2)=>v===null||v===undefined?'—':(Number(v)>0?'+':'')+fmt(v,d
 const tone=v=>v===null||v===undefined?'neutral':v>0?'positive':v<0?'negative':'neutral';
 const today=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const fetchTime=value=>value?new Date(value).toLocaleTimeString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false}):'未知';
-const save=()=>{try{if(!synchronizing)localStorage.setItem(STORE,JSON.stringify(state));window.dispatchEvent(new Event('observatory:state'));}catch{toast('浏览器存储不可用，请及时导出备份');}};
+const save=()=>{try{if(!synchronizing)localStorage.setItem(STORE,JSON.stringify(state));window.dispatchEvent(new Event('observatory:state'));return true;}catch{toast('浏览器存储不可用或空间已满，请及时导出备份');return false;}};
 let toastTimer;function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,4500);}
 function chart(id,option){options.set(id,option);const el=$(id);if(!el||!el.offsetWidth||el.closest('[hidden]'))return;let instance=charts.get(id);if(!instance){el.replaceChildren();instance=init(el,null,{renderer:'canvas'});charts.set(id,instance);}instance.setOption(option,true);instance.resize();}
 function resize(){for(const[id,option]of options)chart(id,option);flowTerminal?.resize();}
@@ -110,9 +110,9 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)clearTimeou
 window.addEventListener('online',refreshAll);window.addEventListener('offline',()=>clearTimeout(timer));
 function download(){state.lastBackupAt=new Date().toISOString();save();const blob=new Blob([JSON.stringify({version:1,...state},null,2)],{type:'application/json'}),link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download='观基备份-'+today()+'.json';link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);product?.render();}
 function restoreBackup(value){
- const replacement=validateBackup(value,today());
+ const replacement=validateBackup(value,today()),previous={...state};
  localStorage.setItem(STORE+'-before-restore',JSON.stringify({version:1,...state}));
- Object.keys(state).forEach(key=>delete state[key]);Object.assign(state,replacement);save();
+ Object.keys(state).forEach(key=>delete state[key]);Object.assign(state,replacement);if(!save()){Object.keys(state).forEach(key=>delete state[key]);Object.assign(state,previous);throw Error('恢复未保存：存储空间不足，已保留原记录，请先导出备份');}
  $('refresh-interval').value=state.interval;$('alert-threshold').value=state.alertThreshold;$('flow-mode').value=state.flowMode;
  features?.reset();renderPortfolio();product?.render();toast('本地备份已恢复，导入前的记录已自动保留');refreshAll();
 }

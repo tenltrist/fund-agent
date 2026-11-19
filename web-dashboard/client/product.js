@@ -1,6 +1,6 @@
 import {emptyLedger,validateLedger} from './ledger.js';
 import {holdingSummary,openingFromValue,quoteStatus,unreadAlerts} from './product-model.js';
-import {STORE} from './store.js';
+import {STORE,persistLedger} from './store.js';
 import {marketClock} from '../worker/data.js';
 
 const $=id=>document.getElementById(id);
@@ -108,7 +108,7 @@ export function mountProduct({state,save,api,go,toast,line,features,download,get
       const q=(await api('/api/funds?codes='+code)).items.find(q=>q.code===code);if(!q)throw Error('该基金代码暂无有效公开记录');
       if(original!==JSON.stringify(state.ledger||emptyLedger()))throw Error('账本已在其他窗口变更，请重新核对后保存');
       const id=crypto.randomUUID();b.positions.push({id,account_id:account,code,name:q.name});b.transactions.push({id:crypto.randomUUID(),position_id:id,type:'opening',date,shares,cost,fee:0});
-      const validated=validateLedger(b,getData().today);state.ledger=validated;state.onboarded=true;save();$('holding-dialog').close();go('ledger');toast('持仓已保存在本浏览器，可继续记录交易和查看收益');
+      persistLedger(state,b,getData().today,save);state.onboarded=true;save();$('holding-dialog').close();go('ledger');toast('持仓已保存在本浏览器，可继续记录交易和查看收益');
     }catch(e){showError(e.message);}finally{$('quick-save').disabled=false;}
   };
   $('quick-account').onchange=()=>{$('quick-new-account-wrap').hidden=$('quick-account').value!=='__new';};

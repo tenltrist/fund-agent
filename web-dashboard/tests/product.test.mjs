@@ -63,3 +63,10 @@ test('a successful fetch cannot make a delayed source quote look current',()=>{
  const data={items:[{as_of:today+' 10:00:00'}],fetched_at:today+'T03:00:00Z'};
  assert.match(quoteStatus(data,{today,trading:true,now:Date.parse(today+'T03:00:00Z')}).label,/延迟/);
 });
+
+test('failed persistence never leaves a new financial ledger pretending to be saved',async()=>{
+ const {persistLedger}=await import('../client/store.js');const original=emptyLedger(),state={ledger:original},next=fixture();
+ assert.throws(()=>persistLedger(state,next,today,()=>false),/未保存/);assert.equal(state.ledger,original);
+ assert.throws(()=>persistLedger(state,next,today,()=>{throw Error('quota');}),/quota/);assert.equal(state.ledger,original);
+ persistLedger(state,next,today,()=>true);assert.equal(state.ledger.positions.length,1);
+});
