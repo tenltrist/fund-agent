@@ -6,6 +6,10 @@ assert(/\.\/assets\/app\.[a-f0-9]{12}\.js/.test(html)&&/\.\/assets\/style\.[a-f0
 for(const match of html.matchAll(/(?:src|href)="(\.\/assets\/[^"]+)"/g))assert((await readFile(new URL(match[1],root))).length>100);
 assert(!/chatgpt\.site|\.openai|src="\/assets/.test(html),'Pages must not depend on the previous host');
 for(const file of ['assets/app.js','assets/bridge.js','bridge.html','assets/style.css'])assert((await readFile(new URL(file,root))).length>100);
+const manifest=JSON.parse(await readFile(new URL('manifest.webmanifest',root),'utf8'));
+assert.equal(manifest.scope,'./');assert.equal(manifest.start_url,'./#home');
+const sw=await readFile(new URL('sw.js',root),'utf8');assert(!/__SHELL_FILES__|__CACHE_NAME__/.test(sw),'Worker template must be resolved');
+assert(html.includes('manifest.webmanifest')&&/boot\.[a-f0-9]{12}\.js/.test(html),'Manifest and independent recovery script required');
 for(const file of ['assets/ocr/worker.min.js','assets/ocr/core/tesseract-core-simd-lstm.wasm.js','assets/ocr/core/tesseract-core-simd-lstm.wasm','assets/ocr/lang/chi_sim.traineddata.gz','assets/ocr/lang/eng.traineddata.gz'])assert((await readFile(new URL(file,root))).length>1000,'Local OCR asset missing: '+file);
 const snapshot=JSON.parse(await readFile(new URL('data/snapshot.json',root),'utf8'));
 assert.equal(snapshot.schema,1);assert(snapshot.routes['/api/indices'].items.length>=5);

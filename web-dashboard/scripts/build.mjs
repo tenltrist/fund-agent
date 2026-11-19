@@ -8,15 +8,20 @@ await rm(out,{recursive:true,force:true});await mkdir(resolve(out,'assets'),{rec
 await build({entryPoints:[resolve(root,'client/app.js')],outfile:resolve(out,'assets/app.js'),bundle:true,minify:true,format:'iife',target:'es2022',define:{__GITHUB_PAGES__:'true'}});
 await build({entryPoints:[resolve(root,'client/pages-bridge.js')],outfile:resolve(out,'assets/bridge.js'),bundle:true,minify:true,format:'iife',target:'es2022'});
 await cp(resolve(root,'client/style.css'),resolve(out,'assets/style.css'));
+await cp(resolve(root,'client/boot.js'),resolve(out,'assets/boot.js'));
 const assets={};
-for(const [key,name] of [['app','app.js'],['bridge','bridge.js'],['style','style.css']]){
+for(const [key,name] of [['app','app.js'],['bridge','bridge.js'],['style','style.css'],['boot','boot.js']]){
   const raw=await readFile(resolve(out,'assets',name)),hash=createHash('sha256').update(raw).digest('hex').slice(0,12),dot=name.lastIndexOf('.');
   assets[key]=name.slice(0,dot)+'.'+hash+name.slice(dot);await cp(resolve(out,'assets',name),resolve(out,'assets',assets[key]));
 }
 let html=await readFile(resolve(root,'client/index.html'),'utf8');
-html=html.replaceAll('"/assets/','"./assets/').replace('href="/"','href="./"').replace('./assets/app.js','./assets/'+assets.app).replace('./assets/style.css','./assets/'+assets.style);
+html=html.replaceAll('"/assets/','"./assets/').replace('href="/"','href="./"').replace('./assets/app.js','./assets/'+assets.app).replace('./assets/style.css','./assets/'+assets.style).replace('./assets/boot.js','./assets/'+assets.boot);
 html=html.replace('<head>','<head><meta http-equiv="Content-Security-Policy" content="default-src \'self\'; script-src \'self\' \'wasm-unsafe-eval\'; worker-src \'self\' blob:; style-src \'self\' \'unsafe-inline\'; img-src \'self\' data: blob:; connect-src \'self\'; frame-src \'self\'; object-src \'none\'; base-uri \'self\'">');
 await writeFile(resolve(out,'index.html'),html);
+for(const name of ['icon.svg','manifest.webmanifest'])await cp(resolve(root,'client',name),resolve(out,name));
+const shell=['./','./assets/'+assets.boot,'./assets/'+assets.app,'./assets/'+assets.style,'./icon.svg','./manifest.webmanifest'];
+const sw=(await readFile(resolve(root,'client/sw.js'),'utf8')).replace('__CACHE_NAME__','guanji-'+assets.app).replace('__SHELL_FILES__',JSON.stringify(shell));
+await writeFile(resolve(out,'sw.js'),sw);
 await writeFile(resolve(out,'bridge.html'),`<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://qt.gtimg.cn https://web.ifzq.gtimg.cn https://push2.eastmoney.com https://push2his.eastmoney.com https://fund.eastmoney.com https://fundf10.eastmoney.com https://fundgz.1234567.com.cn; connect-src 'none'; base-uri 'none'"><script defer src="./assets/${assets.bridge}"></script></head><body></body></html>`);
 await cp(resolve(root,'client/style.css'),resolve(out,'assets/style.css'));
 await cp(resolve(root,'public/data'),resolve(out,'data'),{recursive:true});

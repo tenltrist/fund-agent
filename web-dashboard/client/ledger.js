@@ -39,8 +39,9 @@ export function balances(book,through='9999-12-31'){
 }
 export function valuedPositions(book,quotes){
   return balances(book).map(p=>{
-    const q=quotes.find(q=>q.code===p.code),value=p.shares===0?0:q?.nav>0?p.shares*q.nav:null;
-    return {...p,value,profit:value===null?null:value-p.cost,profit_rate:value===null||!p.cost?null:(value-p.cost)/p.cost*100,total_profit:value===null?null:value-p.cost+p.realized,quote:q||null};
+    const q=quotes.find(q=>q.code===p.code),capitalDate=book.transactions.filter(t=>!t.deleted&&t.position_id===p.id&&t.type!=='dividend').map(t=>t.date).sort().at(-1);
+    const pending=!!q&&(!validDate(q.date)||q.date<capitalDate),value=p.shares===0?0:!pending&&q?.nav>0?p.shares*q.nav:null;
+    return {...p,value,valuation_pending:pending,profit:value===null?null:value-p.cost,profit_rate:value===null||!p.cost?null:(value-p.cost)/p.cost*100,total_profit:value===null?null:value-p.cost+p.realized,quote:q||null};
   });
 }
 export function incomeTimeline(book,histories){

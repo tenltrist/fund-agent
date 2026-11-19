@@ -36,7 +36,7 @@ const json=async url=>JSON.parse(await text(url));
 const east=(path,params,host='push2.eastmoney.com')=>'https://'+host+'/api/qt/'+path+'?'+new URLSearchParams({...params,ut:UT});
 export function stockCode(input) {
   let code=String(input||'').toLowerCase().trim();
-  if(/^\d{6}$/.test(code)) code=(/^[569]/.test(code)?'sh':/^[48]/.test(code)?'bj':'sz')+code;
+  if(/^\d{6}$/.test(code)) code=(/^(?:4|8|92)/.test(code)?'bj':/^[569]/.test(code)?'sh':'sz')+code;
   if(!/^(sh|sz|bj)\d{6}$/.test(code)) throw Error('请输入6位A股/场内ETF代码，或 sh000001 等指数代码');
   return code;
 }

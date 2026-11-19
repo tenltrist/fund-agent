@@ -8,6 +8,10 @@ export default {async fetch(request) {
   if(path==='/')return response(__HTML__,'text/html; charset=utf-8');
   if(path==='/assets/app.js')return response(__APP__,'text/javascript; charset=utf-8');
   if(path==='/assets/style.css')return response(__CSS__,'text/css; charset=utf-8');
+  if(path==='/assets/boot.js')return response(__BOOT__,'text/javascript; charset=utf-8');
+  if(path==='/manifest.webmanifest')return response(__MANIFEST__,'application/manifest+json');
+  if(path==='/icon.svg')return response(__ICON__,'image/svg+xml');
+  if(path==='/api/status')return response({mode:'local',generated_at:null,route_count:0,errors:[]});
   if(path==='/api/health')return response({ok:true,clock:marketClock(),personal_data:'持仓和自选保存在浏览器，不上传服务器'});
   try {
     let data;

@@ -19,7 +19,9 @@ async function file(name,ttl=30000) {
   const task=(async()=>{
     const response=await fetch(new URL('./data/'+name+'.json',document.baseURI),{cache:'no-cache',signal:AbortSignal.timeout(12000)});
     if(!response.ok)throw Error('GitHub 公共快照暂不可用');
-    const value=await response.json();files.set(name,{saved:Date.now(),value});return value;
+    let value=await response.json();
+    if(response.headers.get('X-Observatory-Cache')==='offline')value={...value,stale:true,offline_cached:true,routes:value.routes?Object.fromEntries(Object.entries(value.routes).map(([key,row])=>[key,{...row,stale:true,offline_cached:true}])):undefined};
+    files.set(name,{saved:Date.now(),value});return value;
   })().finally(()=>filePending.delete(name));filePending.set(name,task);return task;
 }
 function bridge(kind,params={}) {
@@ -71,6 +73,7 @@ async function live(path,query) {
 }
 async function snapshot(path,query) {
   const data=await file('snapshot'),routes=data.routes||{};
+  if(path==='/api/status')return {generated_at:data.generated_at,errors:data.errors||[],route_count:Object.keys(routes).length};
   if(path==='/api/fund-directory')return snapshotValue(await file('fund-directory',86400000));
   if(path==='/api/fund-rankings')return snapshotValue(await file('fund-navs',300000));
   if(path==='/api/funds'){
@@ -104,7 +107,7 @@ export async function publicApi(input) {
   if(hit&&Date.now()-hit.saved<20000)return hit.value;
   if(pending.has(key))return pending.get(key);
   const work=(async()=>{
-    if(['/api/fund-directory','/api/fund-rankings','/api/funds','/api/search-funds','/api/sectors','/api/vix'].includes(path))return snapshot(path,query);
+    if(['/api/status','/api/fund-directory','/api/fund-rankings','/api/funds','/api/search-funds','/api/sectors','/api/vix'].includes(path))return snapshot(path,query);
     const direct=live(path,query).then(value=>{const result={...value,fetched_at:new Date().toISOString(),delivery:'browser',stale:false};memo.set(key,{saved:Date.now(),value:result});return result;});
     // Fast first paint from a dated snapshot while direct loading continues.
     const fallback=snapshot(path,query).catch(()=>null);
