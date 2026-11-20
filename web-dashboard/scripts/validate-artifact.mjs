@@ -13,7 +13,10 @@ assert(html.includes('manifest.webmanifest')&&/boot\.[a-f0-9]{12}\.js/.test(html
 for(const file of ['assets/ocr/worker.min.js','assets/ocr/core/tesseract-core-simd-lstm.wasm.js','assets/ocr/core/tesseract-core-simd-lstm.wasm','assets/ocr/lang/chi_sim.traineddata.gz','assets/ocr/lang/eng.traineddata.gz'])assert((await readFile(new URL(file,root))).length>1000,'Local OCR asset missing: '+file);
 const snapshot=JSON.parse(await readFile(new URL('data/snapshot.json',root),'utf8'));
 assert.equal(snapshot.schema,1);assert(snapshot.routes['/api/indices'].items.length>=5);
-assert(snapshot.routes['/api/funds'].items.length>=13,'Default fund coverage must be complete');
+const watch=JSON.parse(await readFile(new URL('../market-watchlist.json',import.meta.url),'utf8'));
+const fundItems=snapshot.routes['/api/funds'].items;
+const missingFunds=watch.funds.filter(code=>!fundItems.some(row=>row.code===code&&Number.isFinite(row.nav)&&row.nav>0&&/^\d{4}-\d{2}-\d{2}$/.test(row.date)));
+assert.equal(missingFunds.length,0,'Default fund coverage must be complete; missing: '+missingFunds.join(', '));
 const privateKey=/"(?:holding_amount|profit_amount|profit_rate|peak_rate|position_id|thresholds|portfolio)"\s*:/;
 for(const file of await readdir(new URL('data/',root))){const raw=await readFile(new URL('data/'+file,root),'utf8');assert(!privateKey.test(raw),'Private portfolio field in '+file);JSON.parse(raw);}
-console.log('Pages artifact valid; relative assets, public data only, 13 funds covered');
+console.log(`Pages artifact valid; relative assets, public data only, ${watch.funds.length} funds covered`);

@@ -1,4 +1,4 @@
-import {mergeSnapshots} from './snapshot-cache.mjs';
+import {mergeSnapshots,mergeFundSnapshots} from './snapshot-cache.mjs';
 import {fundHoldings,preferHoldings} from '../worker/holdings.js';
 // Public-market data only. Never read portfolio.json, peak_state or browser exports.
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
@@ -25,7 +25,11 @@ async function collect(batch){
     const[key,load,ttl]=batch[cursor++],old=routes[key];
     const reusable=key.startsWith('/api/fund-holdings')?Date.now()-Date.parse(old?.as_of)<183*86400000:key.startsWith('/api/fund-history')?old?.history_scope==='all'&&old?.managers:true;
     if(ttl&&reusable&&!old?.stale&&old?.fetched_at&&Date.now()-Date.parse(old.fetched_at)<ttl)continue;
-    try{const fresh=await load();routes[key]=key.startsWith('/api/fund-holdings')?preferHoldings(old,fresh):fresh;}
+    try{
+      const fresh=await load();
+      routes[key]=key==='/api/funds'?mergeFundSnapshots(old,fresh,watch.funds):key.startsWith('/api/fund-holdings')?preferHoldings(old,fresh):fresh;
+      if(key==='/api/funds'&&routes[key].fallback_codes.length)errors.push({route:key,error:'部分基金更新未取得较新数据，保留原日期缓存：'+routes[key].fallback_codes.join('、')});
+    }
     catch(error){errors.push({route:key,error:error.message});if(old)routes[key]={...old,stale:true,error:'快照更新失败，保留上次数据：'+error.message};}
   }}));
 }
